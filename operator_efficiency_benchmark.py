@@ -291,8 +291,8 @@ class OperatorDelayFactorBenchmark:
             
             # Repeat K,V for grouped attention
             group_size = num_q_heads // num_kv_heads
-            k = k.repeat_interleave(group_size, dim=2)
-            v = v.repeat_interleave(group_size, dim=2)
+            k = k.repeat_interleave(group_size, dim=1)
+            v = v.repeat_interleave(group_size, dim=1)
             
             scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(head_dim)
             attn = torch.softmax(scores, dim=-1)
@@ -682,7 +682,7 @@ class OperatorDelayFactorBenchmark:
             }
         }
         
-        with open('/Users/anchovy-mac/Desktop/calculating/delay_factor_benchmark_results.json', 'w') as f:
+        with open('delay_factor_benchmark_results.json', 'w') as f:
             json.dump(output_data, f, indent=2)
         
         print(f"\n💾 Results saved to delay_factor_benchmark_results.json")

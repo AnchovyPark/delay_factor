@@ -1,0 +1,969 @@
+{
+  "gpu_specs": {
+    "peak_fp16_tflops": 312.0,
+    "memory_bandwidth_gb_s": 1600.0,
+    "sm_count": 108,
+    "cuda_cores_per_sm": 64
+  },
+  "benchmark_config": {
+    "dtype": "torch.float16",
+    "warmup_runs": 3,
+    "benchmark_runs": 5
+  },
+  "delay_factors": {
+    "Linear_GEMM": {
+      "avg_delay_factor": 11.06771935962214,
+      "min_delay_factor": 8.621580899718934,
+      "max_delay_factor": 18.181420879437074,
+      "avg_tflops": 29.519652056324066,
+      "sample_count": 18
+    },
+    "BMM": {
+      "avg_delay_factor": 27.228328981863424,
+      "min_delay_factor": 18.804245162594512,
+      "max_delay_factor": 38.254760217216855,
+      "avg_tflops": 11.961839823317158,
+      "sample_count": 12
+    },
+    "Elementwise_Add": {
+      "avg_delay_factor": 8566.338659415806,
+      "min_delay_factor": 7536.414282352175,
+      "max_delay_factor": 11348.419193951686,
+      "avg_tflops": 0.03691793612058215,
+      "sample_count": 12
+    },
+    "Grouped_Query_Attention": {
+      "avg_delay_factor": 16.977543426699434,
+      "min_delay_factor": 10.66623499356717,
+      "max_delay_factor": 25.391677889778833,
+      "avg_tflops": 19.960996701126145,
+      "sample_count": 9
+    },
+    "SwiGLU_MLP": {
+      "avg_delay_factor": 10.814222684060546,
+      "min_delay_factor": 7.928414291677311,
+      "max_delay_factor": 12.767762195661236,
+      "avg_tflops": 29.66131392554141,
+      "sample_count": 9
+    },
+    "RMS_Norm": {
+      "avg_delay_factor": 5603.193330153069,
+      "min_delay_factor": 4463.6272441243855,
+      "max_delay_factor": 6263.57460065119,
+      "avg_tflops": 0.05649172277035603,
+      "sample_count": 12
+    },
+    "Softmax": {
+      "avg_delay_factor": 2464.8618706431953,
+      "min_delay_factor": 1725.2334607795185,
+      "max_delay_factor": 3229.657745667386,
+      "avg_tflops": 0.13478961597864528,
+      "sample_count": 6
+    }
+  },
+  "detailed_results": {
+    "LLaMA_3.2_1B": [
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          2048,
+          2048
+        ],
+        "delay_factor": 8.732216433346705,
+        "achieved_tflops": 35.7297602941368,
+        "actual_time_ms": 0.12020700000903162
+      },
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          2048,
+          512
+        ],
+        "delay_factor": 18.181420879437074,
+        "achieved_tflops": 17.16037498218126,
+        "actual_time_ms": 0.06257100005768734
+      },
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          2048,
+          512
+        ],
+        "delay_factor": 17.708078028112737,
+        "achieved_tflops": 17.619077547810637,
+        "actual_time_ms": 0.06094200000461569
+      },
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          2048,
+          2048
+        ],
+        "delay_factor": 8.715000004614431,
+        "achieved_tflops": 35.800344215123545,
+        "actual_time_ms": 0.11997000001429114
+      },
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          2048,
+          5632
+        ],
+        "delay_factor": 8.621580899718934,
+        "achieved_tflops": 36.18825869976715,
+        "actual_time_ms": 0.3263810000362355
+      },
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          2048,
+          5632
+        ],
+        "delay_factor": 8.70291482289507,
+        "achieved_tflops": 35.85005786557975,
+        "actual_time_ms": 0.32945999998901243
+      },
+      {
+        "operator_name": "BMM",
+        "input_shape": [
+          32,
+          512,
+          64,
+          512
+        ],
+        "delay_factor": 35.24646161025079,
+        "achieved_tflops": 8.851952387449312,
+        "actual_time_ms": 0.1212999999324893
+      },
+      {
+        "operator_name": "BMM",
+        "input_shape": [
+          32,
+          512,
+          512,
+          64
+        ],
+        "delay_factor": 38.254760217216855,
+        "achieved_tflops": 8.155847748839946,
+        "actual_time_ms": 0.13165300003947777
+      },
+      {
+        "operator_name": "BMM",
+        "input_shape": [
+          128,
+          512,
+          64,
+          512
+        ],
+        "delay_factor": 31.240917741172353,
+        "achieved_tflops": 9.986902516273256,
+        "actual_time_ms": 0.4300599999851329
+      },
+      {
+        "operator_name": "BMM",
+        "input_shape": [
+          128,
+          512,
+          512,
+          64
+        ],
+        "delay_factor": 31.113138426460353,
+        "achieved_tflops": 10.027917972256303,
+        "actual_time_ms": 0.4283010000563081
+      },
+      {
+        "operator_name": "Elementwise_Add",
+        "input_shape": [
+          1,
+          512,
+          2048
+        ],
+        "delay_factor": 11348.419193951686,
+        "achieved_tflops": 0.02749281593037074,
+        "actual_time_ms": 0.03814000001511886
+      },
+      {
+        "operator_name": "Elementwise_Add",
+        "input_shape": [
+          1,
+          512,
+          5632
+        ],
+        "delay_factor": 9244.279345798179,
+        "achieved_tflops": 0.0337506027597288,
+        "actual_time_ms": 0.08543800004190416
+      },
+      {
+        "operator_name": "Elementwise_Add",
+        "input_shape": [
+          4,
+          512,
+          2048
+        ],
+        "delay_factor": 8743.921284292202,
+        "achieved_tflops": 0.03568193146483198,
+        "actual_time_ms": 0.11754700005894847
+      },
+      {
+        "operator_name": "Elementwise_Add",
+        "input_shape": [
+          4,
+          512,
+          5632
+        ],
+        "delay_factor": 8114.793259462258,
+        "achieved_tflops": 0.03844829930031702,
+        "actual_time_ms": 0.2999960000806823
+      },
+      {
+        "operator_name": "Grouped_Query_Attention",
+        "input_shape": [
+          1,
+          512,
+          32,
+          8,
+          64
+        ],
+        "delay_factor": 25.391677889778833,
+        "achieved_tflops": 12.287490466535592,
+        "actual_time_ms": 0.964648000035595
+      },
+      {
+        "operator_name": "Grouped_Query_Attention",
+        "input_shape": [
+          4,
+          512,
+          32,
+          8,
+          64
+        ],
+        "delay_factor": 22.43705463984887,
+        "achieved_tflops": 13.90556848963049,
+        "actual_time_ms": 3.409598999951413
+      },
+      {
+        "operator_name": "Grouped_Query_Attention",
+        "input_shape": [
+          8,
+          512,
+          32,
+          8,
+          64
+        ],
+        "delay_factor": 22.784228284359617,
+        "achieved_tflops": 13.693683020819032,
+        "actual_time_ms": 6.924712999989424
+      },
+      {
+        "operator_name": "SwiGLU_MLP",
+        "input_shape": [
+          1,
+          512,
+          2048,
+          5632
+        ],
+        "delay_factor": 10.003084269921983,
+        "achieved_tflops": 31.190380044897235,
+        "actual_time_ms": 1.1365010000190523
+      },
+      {
+        "operator_name": "SwiGLU_MLP",
+        "input_shape": [
+          4,
+          512,
+          2048,
+          5632
+        ],
+        "delay_factor": 7.928414291677311,
+        "achieved_tflops": 39.35213127390626,
+        "actual_time_ms": 3.6031490000141275
+      },
+      {
+        "operator_name": "SwiGLU_MLP",
+        "input_shape": [
+          8,
+          512,
+          2048,
+          5632
+        ],
+        "delay_factor": 9.446733059904279,
+        "achieved_tflops": 33.02729081276289,
+        "actual_time_ms": 8.586328999967918
+      },
+      {
+        "operator_name": "RMS_Norm",
+        "input_shape": [
+          1,
+          512,
+          2048
+        ],
+        "delay_factor": 6082.919307842661,
+        "achieved_tflops": 0.051291162057293914,
+        "actual_time_ms": 0.10221799993814784
+      },
+      {
+        "operator_name": "RMS_Norm",
+        "input_shape": [
+          1,
+          512,
+          2048
+        ],
+        "delay_factor": 6052.926631271161,
+        "achieved_tflops": 0.051545313367606045,
+        "actual_time_ms": 0.1017139999248684
+      },
+      {
+        "operator_name": "RMS_Norm",
+        "input_shape": [
+          4,
+          512,
+          2048
+        ],
+        "delay_factor": 4470.3220363710025,
+        "achieved_tflops": 0.06979362951070096,
+        "actual_time_ms": 0.3004789999749846
+      },
+      {
+        "operator_name": "RMS_Norm",
+        "input_shape": [
+          4,
+          512,
+          2048
+        ],
+        "delay_factor": 4463.6272441243855,
+        "achieved_tflops": 0.0698983098131,
+        "actual_time_ms": 0.30002900007275457
+      },
+      {
+        "operator_name": "Softmax",
+        "input_shape": [
+          1,
+          512,
+          2048
+        ],
+        "delay_factor": 1725.2334607795185,
+        "achieved_tflops": 0.18084508971848248,
+        "actual_time_ms": 0.028991000021960645
+      },
+      {
+        "operator_name": "Softmax",
+        "input_shape": [
+          1,
+          512,
+          2048
+        ],
+        "delay_factor": 1760.7009938566678,
+        "achieved_tflops": 0.17720214908074208,
+        "actual_time_ms": 0.02958700008548476
+      }
+    ],
+    "LLaMA_3_8B": [
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          4096,
+          4096
+        ],
+        "delay_factor": 9.500290733098193,
+        "achieved_tflops": 32.84110021107237,
+        "actual_time_ms": 0.5231210000147257
+      },
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          4096,
+          1024
+        ],
+        "delay_factor": 9.373364970628405,
+        "achieved_tflops": 33.285805148701364,
+        "actual_time_ms": 0.1290330000074391
+      },
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          4096,
+          1024
+        ],
+        "delay_factor": 9.333556518302238,
+        "achieved_tflops": 33.42777208111366,
+        "actual_time_ms": 0.12848500000472995
+      },
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          4096,
+          4096
+        ],
+        "delay_factor": 9.50537575426017,
+        "achieved_tflops": 32.8235314485244,
+        "actual_time_ms": 0.5234010000094713
+      },
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          4096,
+          14336
+        ],
+        "delay_factor": 10.191555267881496,
+        "achieved_tflops": 30.613580734165513,
+        "actual_time_ms": 1.964145999977518
+      },
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          4096,
+          14336
+        ],
+        "delay_factor": 10.389289951698267,
+        "achieved_tflops": 30.030926218302294,
+        "actual_time_ms": 2.002253999989989
+      },
+      {
+        "operator_name": "BMM",
+        "input_shape": [
+          32,
+          512,
+          128,
+          512
+        ],
+        "delay_factor": 27.0822420733182,
+        "achieved_tflops": 11.520464190348063,
+        "actual_time_ms": 0.18640600001162966
+      },
+      {
+        "operator_name": "BMM",
+        "input_shape": [
+          32,
+          512,
+          512,
+          128
+        ],
+        "delay_factor": 25.54191649494847,
+        "achieved_tflops": 12.215214941357493,
+        "actual_time_ms": 0.17580400003680552
+      },
+      {
+        "operator_name": "BMM",
+        "input_shape": [
+          128,
+          512,
+          128,
+          512
+        ],
+        "delay_factor": 25.1874178655912,
+        "achieved_tflops": 12.38713716765014,
+        "actual_time_ms": 0.6934560000217971
+      },
+      {
+        "operator_name": "BMM",
+        "input_shape": [
+          128,
+          512,
+          512,
+          128
+        ],
+        "delay_factor": 19.613617100237395,
+        "achieved_tflops": 15.90731573913634,
+        "actual_time_ms": 0.5399990000114485
+      },
+      {
+        "operator_name": "Elementwise_Add",
+        "input_shape": [
+          1,
+          512,
+          4096
+        ],
+        "delay_factor": 9828.403484297975,
+        "achieved_tflops": 0.031744728479905865,
+        "actual_time_ms": 0.06606300007661048
+      },
+      {
+        "operator_name": "Elementwise_Add",
+        "input_shape": [
+          1,
+          512,
+          14336
+        ],
+        "delay_factor": 8191.877091474502,
+        "achieved_tflops": 0.038086508930255614,
+        "actual_time_ms": 0.1927199999727236
+      },
+      {
+        "operator_name": "Elementwise_Add",
+        "input_shape": [
+          4,
+          512,
+          4096
+        ],
+        "delay_factor": 8032.301902056136,
+        "achieved_tflops": 0.038843161500208695,
+        "actual_time_ms": 0.2159609999807799
+      },
+      {
+        "operator_name": "Elementwise_Add",
+        "input_shape": [
+          4,
+          512,
+          14336
+        ],
+        "delay_factor": 7617.623192763209,
+        "achieved_tflops": 0.04095765727771913,
+        "actual_time_ms": 0.7168409999849246
+      },
+      {
+        "operator_name": "Grouped_Query_Attention",
+        "input_shape": [
+          1,
+          512,
+          32,
+          8,
+          128
+        ],
+        "delay_factor": 13.554866374441104,
+        "achieved_tflops": 23.01756368386659,
+        "actual_time_ms": 1.961071999971864
+      },
+      {
+        "operator_name": "Grouped_Query_Attention",
+        "input_shape": [
+          4,
+          512,
+          32,
+          8,
+          128
+        ],
+        "delay_factor": 12.758637068341883,
+        "achieved_tflops": 24.45402266157161,
+        "actual_time_ms": 7.383505000007062
+      },
+      {
+        "operator_name": "Grouped_Query_Attention",
+        "input_shape": [
+          8,
+          512,
+          32,
+          8,
+          128
+        ],
+        "delay_factor": 17.755403945775598,
+        "achieved_tflops": 17.57211499962701,
+        "actual_time_ms": 20.550331999970695
+      },
+      {
+        "operator_name": "SwiGLU_MLP",
+        "input_shape": [
+          1,
+          512,
+          4096,
+          14336
+        ],
+        "delay_factor": 8.6721991727346,
+        "achieved_tflops": 35.97703348199476,
+        "actual_time_ms": 5.015014000036899
+      },
+      {
+        "operator_name": "SwiGLU_MLP",
+        "input_shape": [
+          4,
+          512,
+          4096,
+          14336
+        ],
+        "delay_factor": 12.767762195661236,
+        "achieved_tflops": 24.436545356869544,
+        "actual_time_ms": 29.53368800001499
+      },
+      {
+        "operator_name": "SwiGLU_MLP",
+        "input_shape": [
+          8,
+          512,
+          4096,
+          14336
+        ],
+        "delay_factor": 11.84744189397485,
+        "achieved_tflops": 26.334798920488574,
+        "actual_time_ms": 54.80970700000398
+      },
+      {
+        "operator_name": "RMS_Norm",
+        "input_shape": [
+          1,
+          512,
+          4096
+        ],
+        "delay_factor": 6187.120056653367,
+        "achieved_tflops": 0.0504273389142479,
+        "actual_time_ms": 0.2079380000168385
+      },
+      {
+        "operator_name": "RMS_Norm",
+        "input_shape": [
+          1,
+          512,
+          4096
+        ],
+        "delay_factor": 6223.0934132385955,
+        "achieved_tflops": 0.050135837481769426,
+        "actual_time_ms": 0.2091469999641049
+      },
+      {
+        "operator_name": "RMS_Norm",
+        "input_shape": [
+          4,
+          512,
+          4096
+        ],
+        "delay_factor": 5458.094215590911,
+        "achieved_tflops": 0.0571628095221918,
+        "actual_time_ms": 0.7337470000265967
+      },
+      {
+        "operator_name": "RMS_Norm",
+        "input_shape": [
+          4,
+          512,
+          4096
+        ],
+        "delay_factor": 5238.326453724588,
+        "achieved_tflops": 0.05956100727135091,
+        "actual_time_ms": 0.704202999941117
+      },
+      {
+        "operator_name": "Softmax",
+        "input_shape": [
+          1,
+          512,
+          4096
+        ],
+        "delay_factor": 3222.6356507826517,
+        "achieved_tflops": 0.09681516429703353,
+        "actual_time_ms": 0.10830700000497018
+      },
+      {
+        "operator_name": "Softmax",
+        "input_shape": [
+          1,
+          512,
+          4096
+        ],
+        "delay_factor": 3229.657745667386,
+        "achieved_tflops": 0.09660466358039044,
+        "actual_time_ms": 0.10854300001028605
+      }
+    ],
+    "LLaMA_3_70B": [
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          8192,
+          8192
+        ],
+        "delay_factor": 11.222532950454177,
+        "achieved_tflops": 27.801210419914455,
+        "actual_time_ms": 2.4718160000247735
+      },
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          8192,
+          1024
+        ],
+        "delay_factor": 11.494363658539108,
+        "achieved_tflops": 27.14373838069902,
+        "actual_time_ms": 0.3164610000112589
+      },
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          8192,
+          1024
+        ],
+        "delay_factor": 11.473115535725263,
+        "achieved_tflops": 27.19400837797605,
+        "actual_time_ms": 0.315876000058779
+      },
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          8192,
+          8192
+        ],
+        "delay_factor": 12.017471599419707,
+        "achieved_tflops": 25.96219990360249,
+        "actual_time_ms": 2.6469050000059724
+      },
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          8192,
+          28672
+        ],
+        "delay_factor": 12.144235860883537,
+        "achieved_tflops": 25.691200630000026,
+        "actual_time_ms": 9.361889000047086
+      },
+      {
+        "operator_name": "Linear_GEMM",
+        "input_shape": [
+          512,
+          8192,
+          28672
+        ],
+        "delay_factor": 11.912584604183023,
+        "achieved_tflops": 26.190789855162365,
+        "actual_time_ms": 9.183311000015237
+      },
+      {
+        "operator_name": "BMM",
+        "input_shape": [
+          64,
+          512,
+          128,
+          512
+        ],
+        "delay_factor": 27.34651788895579,
+        "achieved_tflops": 11.409130817565801,
+        "actual_time_ms": 0.37644999997610284
+      },
+      {
+        "operator_name": "BMM",
+        "input_shape": [
+          64,
+          512,
+          512,
+          128
+        ],
+        "delay_factor": 22.141998636764065,
+        "achieved_tflops": 14.090868901146186,
+        "actual_time_ms": 0.30480500004159694
+      },
+      {
+        "operator_name": "BMM",
+        "input_shape": [
+          256,
+          512,
+          128,
+          512
+        ],
+        "delay_factor": 25.166714564851063,
+        "achieved_tflops": 12.397327398299055,
+        "actual_time_ms": 1.3857720000487461
+      },
+      {
+        "operator_name": "BMM",
+        "input_shape": [
+          256,
+          512,
+          512,
+          128
+        ],
+        "delay_factor": 18.804245162594512,
+        "achieved_tflops": 16.59199809948403,
+        "actual_time_ms": 1.0354309999911493
+      },
+      {
+        "operator_name": "Elementwise_Add",
+        "input_shape": [
+          1,
+          512,
+          8192
+        ],
+        "delay_factor": 8611.885076153374,
+        "achieved_tflops": 0.03622900180866782,
+        "actual_time_ms": 0.11577200007195643
+      },
+      {
+        "operator_name": "Elementwise_Add",
+        "input_shape": [
+          1,
+          512,
+          28672
+        ],
+        "delay_factor": 7790.274484464007,
+        "achieved_tflops": 0.040049936702771585,
+        "actual_time_ms": 0.3665440000304443
+      },
+      {
+        "operator_name": "Elementwise_Add",
+        "input_shape": [
+          4,
+          512,
+          8192
+        ],
+        "delay_factor": 7735.871315923958,
+        "achieved_tflops": 0.04033159126597173,
+        "actual_time_ms": 0.4159820000495529
+      },
+      {
+        "operator_name": "Elementwise_Add",
+        "input_shape": [
+          4,
+          512,
+          28672
+        ],
+        "delay_factor": 7536.414282352175,
+        "achieved_tflops": 0.041398998026236734,
+        "actual_time_ms": 1.4183979999415897
+      },
+      {
+        "operator_name": "Grouped_Query_Attention",
+        "input_shape": [
+          1,
+          512,
+          64,
+          8,
+          128
+        ],
+        "delay_factor": 10.66623499356717,
+        "achieved_tflops": 29.2511837764842,
+        "actual_time_ms": 5.435597999962738
+      },
+      {
+        "operator_name": "Grouped_Query_Attention",
+        "input_shape": [
+          4,
+          512,
+          64,
+          8,
+          128
+        ],
+        "delay_factor": 13.826881907094215,
+        "achieved_tflops": 22.564740343947026,
+        "actual_time_ms": 28.185154999960105
+      },
+      {
+        "operator_name": "Grouped_Query_Attention",
+        "input_shape": [
+          8,
+          512,
+          64,
+          8,
+          128
+        ],
+        "delay_factor": 13.622905737087631,
+        "achieved_tflops": 22.90260286765376,
+        "actual_time_ms": 55.53872699999829
+      },
+      {
+        "operator_name": "SwiGLU_MLP",
+        "input_shape": [
+          1,
+          512,
+          8192,
+          28672
+        ],
+        "delay_factor": 12.396148814402318,
+        "achieved_tflops": 25.169107330940278,
+        "actual_time_ms": 28.671175999988918
+      },
+      {
+        "operator_name": "SwiGLU_MLP",
+        "input_shape": [
+          4,
+          512,
+          8192,
+          28672
+        ],
+        "delay_factor": 11.816603879270193,
+        "achieved_tflops": 26.403525343465223,
+        "actual_time_ms": 109.32296299995414
+      },
+      {
+        "operator_name": "SwiGLU_MLP",
+        "input_shape": [
+          8,
+          512,
+          8192,
+          28672
+        ],
+        "delay_factor": 12.449616578998139,
+        "achieved_tflops": 25.061012764547943,
+        "actual_time_ms": 230.35873700007414
+      },
+      {
+        "operator_name": "RMS_Norm",
+        "input_shape": [
+          1,
+          512,
+          8192
+        ],
+        "delay_factor": 6125.260162493166,
+        "achieved_tflops": 0.05093661195168021,
+        "actual_time_ms": 0.41171800000938674
+      },
+      {
+        "operator_name": "RMS_Norm",
+        "input_shape": [
+          1,
+          512,
+          8192
+        ],
+        "delay_factor": 6263.57460065119,
+        "achieved_tflops": 0.04981181192726005,
+        "actual_time_ms": 0.4210150000290014
+      },
+      {
+        "operator_name": "RMS_Norm",
+        "input_shape": [
+          4,
+          512,
+          8192
+        ],
+        "delay_factor": 5650.777816924424,
+        "achieved_tflops": 0.055213637858055754,
+        "actual_time_ms": 1.5193000000408574
+      },
+      {
+        "operator_name": "RMS_Norm",
+        "input_shape": [
+          4,
+          512,
+          8192
+        ],
+        "delay_factor": 5022.2780229513755,
+        "achieved_tflops": 0.0621232035690153,
+        "actual_time_ms": 1.3503180000498105
+      },
+      {
+        "operator_name": "Softmax",
+        "input_shape": [
+          1,
+          512,
+          8192
+        ],
+        "delay_factor": 2420.495223264679,
+        "achieved_tflops": 0.12889924218862342,
+        "actual_time_ms": 0.16269699995064002
+      },
+      {
+        "operator_name": "Softmax",
+        "input_shape": [
+          1,
+          512,
+          8192
+        ],
+        "delay_factor": 2430.4481495082687,
+        "achieved_tflops": 0.1283713870065997,
+        "actual_time_ms": 0.1633659999242809
+      }
+    ]
+  }
+}
