@@ -43,11 +43,13 @@ class BenchmarkResult:
 class OperatorDelayFactorBenchmark:
     """Benchmark suite for measuring operator performance delay factors on GPU."""
     
-    def __init__(self, device='cuda', dtype=torch.float16, warmup_runs=5, benchmark_runs=10):
+    def __init__(self, device='cuda', dtype=torch.float16, warmup_runs=5, benchmark_runs=10, enable_memory_optimization=True):
         self.device = device
         self.dtype = dtype
         self.warmup_runs = warmup_runs
         self.benchmark_runs = benchmark_runs
+        self.enable_memory_optimization = enable_memory_optimization
+        self.failed_operations = []  # Track failed operations
         
         # GPU specifications (A100 example - adjust for your GPU)
         self.gpu_specs = {
@@ -58,30 +60,79 @@ class OperatorDelayFactorBenchmark:
         }
         
         if torch.cuda.is_available():
-            print(f"🚀 GPU: {torch.cuda.get_device_name()}")
+            print(f"GPU: {torch.cuda.get_device_name()}")
             print(f"   Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+            print(f"   Available: {torch.cuda.memory_reserved(0) / 1e9:.1f} GB reserved")
+            # Clear any existing cache
+            torch.cuda.empty_cache()
         else:
-            print("❌ CUDA not available")
+            print("CUDA not available")
+    
+    def get_memory_info(self) -> Dict[str, float]:
+        """Get current GPU memory usage information."""
+        if torch.cuda.is_available():
+            return {
+                'allocated_gb': torch.cuda.memory_allocated(0) / 1e9,
+                'reserved_gb': torch.cuda.memory_reserved(0) / 1e9,
+                'free_gb': (torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / 1e9
+            }
+        return {'allocated_gb': 0, 'reserved_gb': 0, 'free_gb': 0}
+    
+    def clear_gpu_cache(self):
+        """Clear GPU cache and collect garbage."""
+        import gc
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
     
     def measure_time(self, func, *args, **kwargs) -> float:
         """Measure execution time of a function with proper GPU synchronization."""
         
-        # Warmup runs
-        for _ in range(self.warmup_runs):
-            func(*args, **kwargs)
-        
-        torch.cuda.synchronize()
-        
-        # Benchmark runs
-        times = []
-        for _ in range(self.benchmark_runs):
-            start = time.perf_counter()
-            result = func(*args, **kwargs)
+        try:
+            # Warmup runs
+            for _ in range(self.warmup_runs):
+                try:
+                    func(*args, **kwargs)
+                except torch.cuda.OutOfMemoryError:
+                    torch.cuda.empty_cache()
+                    # Try with reduced warmup
+                    if self.warmup_runs > 1:
+                        self.warmup_runs = 1
+                        func(*args, **kwargs)
+                    else:
+                        raise
+            
             torch.cuda.synchronize()
-            end = time.perf_counter()
-            times.append((end - start) * 1000)  # Convert to ms
+            
+            # Benchmark runs
+            times = []
+            for _ in range(self.benchmark_runs):
+                try:
+                    start = time.perf_counter()
+                    result = func(*args, **kwargs)
+                    torch.cuda.synchronize()
+                    end = time.perf_counter()
+                    times.append((end - start) * 1000)  # Convert to ms
+                except torch.cuda.OutOfMemoryError:
+                    torch.cuda.empty_cache()
+                    # If we have at least one measurement, use that
+                    if times:
+                        break
+                    else:
+                        raise
+            
+            if not times:
+                raise RuntimeError("No successful benchmark runs completed")
+            
+            return np.median(times), result if 'result' in locals() else None
         
-        return np.median(times), result
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            raise
+        except Exception as e:
+            torch.cuda.empty_cache()
+            raise RuntimeError(f"Measurement failed: {str(e)}")
     
     def calculate_delay_factor(self, theoretical_flops: int, actual_time_ms: float, memory_bytes: int = 0) -> Tuple[float, float, float, float, float, str, float]:
         """Calculate performance delay factor, memory efficiency, and bottleneck analysis."""
@@ -123,8 +174,18 @@ class OperatorDelayFactorBenchmark:
     def benchmark_linear_gemm(self, m: int, k: int, n: int) -> BenchmarkResult:
         """Benchmark Linear/GEMM operation: A @ B where A(m,k), B(k,n)"""
         
-        A = torch.randn(m, k, device=self.device, dtype=self.dtype)
-        B = torch.randn(k, n, device=self.device, dtype=self.dtype)
+        try:
+            A = torch.randn(m, k, device=self.device, dtype=self.dtype)
+            B = torch.randn(k, n, device=self.device, dtype=self.dtype)
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            # Try with smaller precision if possible
+            if self.dtype == torch.float32:
+                self.dtype = torch.float16
+                A = torch.randn(m, k, device=self.device, dtype=self.dtype)
+                B = torch.randn(k, n, device=self.device, dtype=self.dtype)
+            else:
+                raise
         
         def gemm_op():
             return torch.mm(A, B)
@@ -156,8 +217,12 @@ class OperatorDelayFactorBenchmark:
     def benchmark_bmm(self, batch: int, m: int, k: int, n: int) -> BenchmarkResult:
         """Benchmark Batch Matrix Multiply: batched A @ B"""
         
-        A = torch.randn(batch, m, k, device=self.device, dtype=self.dtype)
-        B = torch.randn(batch, k, n, device=self.device, dtype=self.dtype)
+        try:
+            A = torch.randn(batch, m, k, device=self.device, dtype=self.dtype)
+            B = torch.randn(batch, k, n, device=self.device, dtype=self.dtype)
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            raise
         
         def bmm_op():
             return torch.bmm(A, B)
@@ -189,8 +254,12 @@ class OperatorDelayFactorBenchmark:
     def benchmark_elementwise_add(self, shape: Tuple[int, ...]) -> BenchmarkResult:
         """Benchmark elementwise addition."""
         
-        A = torch.randn(shape, device=self.device, dtype=self.dtype)
-        B = torch.randn(shape, device=self.device, dtype=self.dtype)
+        try:
+            A = torch.randn(shape, device=self.device, dtype=self.dtype)
+            B = torch.randn(shape, device=self.device, dtype=self.dtype)
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            return None
         
         def add_op():
             return A + B
@@ -222,8 +291,12 @@ class OperatorDelayFactorBenchmark:
     def benchmark_elementwise_mul(self, shape: Tuple[int, ...]) -> BenchmarkResult:
         """Benchmark elementwise multiplication."""
         
-        A = torch.randn(shape, device=self.device, dtype=self.dtype)
-        B = torch.randn(shape, device=self.device, dtype=self.dtype)
+        try:
+            A = torch.randn(shape, device=self.device, dtype=self.dtype)
+            B = torch.randn(shape, device=self.device, dtype=self.dtype)
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            return None
         
         def mul_op():
             return A * B
@@ -255,7 +328,11 @@ class OperatorDelayFactorBenchmark:
     def benchmark_nonlinear_silu(self, shape: Tuple[int, ...]) -> BenchmarkResult:
         """Benchmark SiLU activation function."""
         
-        x = torch.randn(shape, device=self.device, dtype=self.dtype)
+        try:
+            x = torch.randn(shape, device=self.device, dtype=self.dtype)
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            return None
         
         def silu_op():
             return F.silu(x)
@@ -295,8 +372,12 @@ class OperatorDelayFactorBenchmark:
     def benchmark_embedding(self, vocab_size: int, embed_dim: int, seq_len: int) -> BenchmarkResult:
         """Benchmark embedding lookup."""
         
-        embedding = nn.Embedding(vocab_size, embed_dim).to(self.device).to(self.dtype)
-        input_ids = torch.randint(0, vocab_size, (1, seq_len), device=self.device)
+        try:
+            embedding = nn.Embedding(vocab_size, embed_dim).to(self.device).to(self.dtype)
+            input_ids = torch.randint(0, vocab_size, (1, seq_len), device=self.device)
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            return None
         
         def embed_op():
             return embedding(input_ids)
@@ -343,13 +424,17 @@ class OperatorDelayFactorBenchmark:
         
         hidden_dim = num_heads * head_dim
         
-        # Linear projections
-        q_proj = nn.Linear(hidden_dim, hidden_dim, bias=False).to(self.device).to(self.dtype)
-        k_proj = nn.Linear(hidden_dim, hidden_dim, bias=False).to(self.device).to(self.dtype)
-        v_proj = nn.Linear(hidden_dim, hidden_dim, bias=False).to(self.device).to(self.dtype)
-        o_proj = nn.Linear(hidden_dim, hidden_dim, bias=False).to(self.device).to(self.dtype)
-        
-        x = torch.randn(batch, seq_len, hidden_dim, device=self.device, dtype=self.dtype)
+        try:
+            # Linear projections
+            q_proj = nn.Linear(hidden_dim, hidden_dim, bias=False).to(self.device).to(self.dtype)
+            k_proj = nn.Linear(hidden_dim, hidden_dim, bias=False).to(self.device).to(self.dtype)
+            v_proj = nn.Linear(hidden_dim, hidden_dim, bias=False).to(self.device).to(self.dtype)
+            o_proj = nn.Linear(hidden_dim, hidden_dim, bias=False).to(self.device).to(self.dtype)
+            
+            x = torch.randn(batch, seq_len, hidden_dim, device=self.device, dtype=self.dtype)
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            return None
         
         def mha_op():
             # Q, K, V projections
@@ -413,12 +498,16 @@ class OperatorDelayFactorBenchmark:
         hidden_dim = num_q_heads * head_dim
         kv_dim = num_kv_heads * head_dim
         
-        q_proj = nn.Linear(hidden_dim, hidden_dim, bias=False).to(self.device).to(self.dtype)
-        k_proj = nn.Linear(hidden_dim, kv_dim, bias=False).to(self.device).to(self.dtype)
-        v_proj = nn.Linear(hidden_dim, kv_dim, bias=False).to(self.device).to(self.dtype)
-        o_proj = nn.Linear(hidden_dim, hidden_dim, bias=False).to(self.device).to(self.dtype)
-        
-        x = torch.randn(batch, seq_len, hidden_dim, device=self.device, dtype=self.dtype)
+        try:
+            q_proj = nn.Linear(hidden_dim, hidden_dim, bias=False).to(self.device).to(self.dtype)
+            k_proj = nn.Linear(hidden_dim, kv_dim, bias=False).to(self.device).to(self.dtype)
+            v_proj = nn.Linear(hidden_dim, kv_dim, bias=False).to(self.device).to(self.dtype)
+            o_proj = nn.Linear(hidden_dim, hidden_dim, bias=False).to(self.device).to(self.dtype)
+            
+            x = torch.randn(batch, seq_len, hidden_dim, device=self.device, dtype=self.dtype)
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            return None
         
         def gqa_op():
             q = q_proj(x).view(batch, seq_len, num_q_heads, head_dim).transpose(1, 2)
@@ -485,11 +574,15 @@ class OperatorDelayFactorBenchmark:
     def benchmark_swiglu_mlp(self, batch: int, seq_len: int, hidden_dim: int, intermediate_dim: int) -> BenchmarkResult:
         """Benchmark SwiGLU MLP."""
         
-        gate_proj = nn.Linear(hidden_dim, intermediate_dim, bias=False).to(self.device).to(self.dtype)
-        up_proj = nn.Linear(hidden_dim, intermediate_dim, bias=False).to(self.device).to(self.dtype)
-        down_proj = nn.Linear(intermediate_dim, hidden_dim, bias=False).to(self.device).to(self.dtype)
-        
-        x = torch.randn(batch, seq_len, hidden_dim, device=self.device, dtype=self.dtype)
+        try:
+            gate_proj = nn.Linear(hidden_dim, intermediate_dim, bias=False).to(self.device).to(self.dtype)
+            up_proj = nn.Linear(hidden_dim, intermediate_dim, bias=False).to(self.device).to(self.dtype)
+            down_proj = nn.Linear(intermediate_dim, hidden_dim, bias=False).to(self.device).to(self.dtype)
+            
+            x = torch.randn(batch, seq_len, hidden_dim, device=self.device, dtype=self.dtype)
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            return None
         
         def swiglu_mlp_op():
             gate = gate_proj(x)
@@ -543,10 +636,14 @@ class OperatorDelayFactorBenchmark:
     def benchmark_rms_norm(self, shape: Tuple[int, ...]) -> BenchmarkResult:
         """Benchmark RMS Normalization."""
         
-        x = torch.randn(shape, device=self.device, dtype=self.dtype)
-        hidden_dim = shape[-1]
-        weight = torch.ones(hidden_dim, device=self.device, dtype=self.dtype)
-        eps = 1e-6
+        try:
+            x = torch.randn(shape, device=self.device, dtype=self.dtype)
+            hidden_dim = shape[-1]
+            weight = torch.ones(hidden_dim, device=self.device, dtype=self.dtype)
+            eps = 1e-6
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            return None
         
         def rms_norm_op():
             variance = x.pow(2).mean(-1, keepdim=True)
@@ -583,7 +680,11 @@ class OperatorDelayFactorBenchmark:
     def benchmark_softmax(self, shape: Tuple[int, ...]) -> BenchmarkResult:
         """Benchmark Softmax operation."""
         
-        x = torch.randn(shape, device=self.device, dtype=self.dtype)
+        try:
+            x = torch.randn(shape, device=self.device, dtype=self.dtype)
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            return None
         
         def softmax_op():
             return torch.softmax(x, dim=-1)
@@ -739,7 +840,7 @@ class OperatorDelayFactorBenchmark:
     def run_comprehensive_benchmark(self) -> Dict[str, List[BenchmarkResult]]:
         """Run comprehensive benchmark across all operators and realistic sizes."""
         
-        print("🚀 Starting Comprehensive Operator Delay Factor Benchmark")
+        print("Starting Comprehensive Operator Delay Factor Benchmark")
         print("=" * 80)
         
         results = {}
@@ -749,66 +850,228 @@ class OperatorDelayFactorBenchmark:
         
         # Benchmark each LLaMA model size
         for model_name, configs in llama_configs.items():
-            print(f"\n📊 Benchmarking {model_name} Operations")
+            print(f"\nBenchmarking {model_name} Operations")
             print("-" * 50)
             
             category_results = []
             
             # Linear projections (Q, K, V, O, Gate, Up, Down)
-            print("  🔧 Linear Projections...")
-            for i, (m, k, n) in enumerate(configs['linear_projections']):  # Sample first 6
-                result = self.benchmark_linear_gemm(m, k, n)
-                category_results.append(result)
-                if i < 3:  # Only print first few to avoid spam
-                    print(f"    ✓ {result.operator_name} {result.input_shape}: {result.delay_factor:.2f}x delay, {result.achieved_tflops:.2f} TFLOPS")
+            print("  Linear Projections...")
+            for i, (m, k, n) in enumerate(configs['linear_projections'][:6]):  # Sample first 6
+                try:
+                    # Check memory before operation
+                    if self.enable_memory_optimization:
+                        mem_info = self.get_memory_info()
+                        if mem_info['free_gb'] < 1.0:  # Less than 1GB free
+                            self.clear_gpu_cache()
+                    
+                    result = self.benchmark_linear_gemm(m, k, n)
+                    if result is not None:
+                        category_results.append(result)
+                        if i < 3:  # Only print first few to avoid spam
+                            print(f"    OK {result.operator_name} {result.input_shape}: {result.delay_factor:.2f}x delay, {result.achieved_tflops:.2f} TFLOPS")
+                    else:
+                        print(f"    WARNING Linear_GEMM {(m, k, n)}: Skipped (Out of Memory)")
+                        self.failed_operations.append({'op': 'Linear_GEMM', 'params': (m, k, n), 'reason': 'OOM'})
+                        self.clear_gpu_cache()
+                        continue
+                except torch.cuda.OutOfMemoryError:
+                    op_name = 'Linear_GEMM'
+                    print(f"    {op_name} {(m, k, n)}: Skipped (Out of Memory)")
+                    self.failed_operations.append({'op': op_name, 'params': (m, k, n), 'reason': 'OOM'})
+                    self.clear_gpu_cache()  # Clear GPU memory
+                    continue
+                except Exception as e:
+                    print(f"    Linear_GEMM {(m, k, n)}: Error - {str(e)}")
+                    self.failed_operations.append({'op': 'Linear_GEMM', 'params': (m, k, n), 'reason': str(e)})
+                    self.clear_gpu_cache()
+                    continue
             
             # BMM operations
-            print("  🔧 Batch Matrix Multiply...")
-            for i, (batch, m, k, n) in enumerate(configs['bmm_operations']):  # Sample first 4
-                result = self.benchmark_bmm(batch, m, k, n)
-                category_results.append(result)
-                if i < 2:
-                    print(f"    ✓ {result.operator_name} {result.input_shape}: {result.delay_factor:.2f}x delay, {result.achieved_tflops:.2f} TFLOPS")
+            print("  Batch Matrix Multiply...")
+            for i, (batch, m, k, n) in enumerate(configs['bmm_operations'][:4]):  # Sample first 4
+                try:
+                    # Check memory before operation
+                    if self.enable_memory_optimization:
+                        mem_info = self.get_memory_info()
+                        if mem_info['free_gb'] < 1.0:
+                            self.clear_gpu_cache()
+                    
+                    result = self.benchmark_bmm(batch, m, k, n)
+                    if result is not None:
+                        category_results.append(result)
+                        if i < 2:
+                            print(f"    OK {result.operator_name} {result.input_shape}: {result.delay_factor:.2f}x delay, {result.achieved_tflops:.2f} TFLOPS")
+                    else:
+                        print(f"    WARNING BMM {(batch, m, k, n)}: Skipped (Out of Memory)")
+                        self.failed_operations.append({'op': 'BMM', 'params': (batch, m, k, n), 'reason': 'OOM'})
+                        self.clear_gpu_cache()
+                        continue
+                except torch.cuda.OutOfMemoryError:
+                    print(f"    BMM {(batch, m, k, n)}: Skipped (Out of Memory)")
+                    self.failed_operations.append({'op': 'BMM', 'params': (batch, m, k, n), 'reason': 'OOM'})
+                    self.clear_gpu_cache()  # Clear GPU memory
+                    continue
+                except Exception as e:
+                    print(f"    BMM {(batch, m, k, n)}: Error - {str(e)}")
+                    self.failed_operations.append({'op': 'BMM', 'params': (batch, m, k, n), 'reason': str(e)})
+                    self.clear_gpu_cache()
+                    continue
             
             # Elementwise operations
-            print("  🔧 Elementwise Operations...")
-            for i, shape in enumerate(configs['elementwise_ops']):  # Sample first 4
-                result = self.benchmark_elementwise_add(shape)
-                category_results.append(result)
-                if i < 2:
-                    print(f"    ✓ {result.operator_name} {result.input_shape}: {result.delay_factor:.2f}x delay, {result.achieved_tflops:.2f} TFLOPS")
+            print("  Elementwise Operations...")
+            for i, shape in enumerate(configs['elementwise_ops'][:4]):  # Sample first 4
+                try:
+                    # Check memory before operation
+                    if self.enable_memory_optimization:
+                        mem_info = self.get_memory_info()
+                        if mem_info['free_gb'] < 1.0:
+                            self.clear_gpu_cache()
+                    
+                    result = self.benchmark_elementwise_add(shape)
+                    if result is not None:
+                        category_results.append(result)
+                        if i < 2:
+                            print(f"    OK {result.operator_name} {result.input_shape}: {result.delay_factor:.2f}x delay, {result.achieved_tflops:.2f} TFLOPS")
+                    else:
+                        print(f"    WARNING Elementwise_Add {shape}: Skipped (Out of Memory)")
+                        self.failed_operations.append({'op': 'Elementwise_Add', 'params': shape, 'reason': 'OOM'})
+                        self.clear_gpu_cache()
+                        continue
+                except torch.cuda.OutOfMemoryError:
+                    print(f"     Elementwise_Add {shape}: Skipped (Out of Memory)")
+                    self.failed_operations.append({'op': 'Elementwise_Add', 'params': shape, 'reason': 'OOM'})
+                    self.clear_gpu_cache()
+                    continue
+                except Exception as e:
+                    print(f"    Elementwise_Add {shape}: Error - {str(e)}")
+                    self.failed_operations.append({'op': 'Elementwise_Add', 'params': shape, 'reason': str(e)})
+                    self.clear_gpu_cache()
+                    continue
             
             # GQA blocks
-            print("  🔧 Grouped Query Attention...")
-            for i, (batch, seq_len, num_q_heads, num_kv_heads, head_dim) in enumerate(configs['gqa_blocks']):  # Sample first 3
-                result = self.benchmark_grouped_query_attention(batch, seq_len, num_q_heads, num_kv_heads, head_dim)
-                category_results.append(result)
-                if i < 2:
-                    print(f"    ✓ {result.operator_name} {result.input_shape}: {result.delay_factor:.2f}x delay, {result.achieved_tflops:.2f} TFLOPS")
+            print("  Grouped Query Attention...")
+            for i, (batch, seq_len, num_q_heads, num_kv_heads, head_dim) in enumerate(configs['gqa_blocks'][:3]):  # Sample first 3
+                try:
+                    # Check memory before operation
+                    if self.enable_memory_optimization:
+                        mem_info = self.get_memory_info()
+                        if mem_info['free_gb'] < 2.0:  # GQA needs more memory
+                            self.clear_gpu_cache()
+                    
+                    result = self.benchmark_grouped_query_attention(batch, seq_len, num_q_heads, num_kv_heads, head_dim)
+                    if result is not None:
+                        category_results.append(result)
+                        if i < 2:
+                            print(f"    OK {result.operator_name} {result.input_shape}: {result.delay_factor:.2f}x delay, {result.achieved_tflops:.2f} TFLOPS")
+                    else:
+                        print(f"    WARNING Grouped_Query_Attention {(batch, seq_len, num_q_heads, num_kv_heads, head_dim)}: Skipped (Out of Memory)")
+                        self.failed_operations.append({'op': 'Grouped_Query_Attention', 'params': (batch, seq_len, num_q_heads, num_kv_heads, head_dim), 'reason': 'OOM'})
+                        self.clear_gpu_cache()
+                        continue
+                except torch.cuda.OutOfMemoryError:
+                    print(f"     GQA {(batch, seq_len, num_q_heads, num_kv_heads, head_dim)}: Skipped (Out of Memory)")
+                    self.failed_operations.append({'op': 'GQA', 'params': (batch, seq_len, num_q_heads, num_kv_heads, head_dim), 'reason': 'OOM'})
+                    self.clear_gpu_cache()
+                    continue
+                except Exception as e:
+                    print(f"    GQA {(batch, seq_len, num_q_heads, num_kv_heads, head_dim)}: Error - {str(e)}")
+                    self.failed_operations.append({'op': 'GQA', 'params': (batch, seq_len, num_q_heads, num_kv_heads, head_dim), 'reason': str(e)})
+                    self.clear_gpu_cache()
+                    continue
             
             # MLP blocks
-            print("  🔧 SwiGLU MLP...")
-            for i, (batch, seq_len, hidden_dim, intermediate_dim) in enumerate(configs['mlp_blocks']):  # Sample first 3
-                result = self.benchmark_swiglu_mlp(batch, seq_len, hidden_dim, intermediate_dim)
-                category_results.append(result)
-                if i < 2:
-                    print(f"    ✓ {result.operator_name} {result.input_shape}: {result.delay_factor:.2f}x delay, {result.achieved_tflops:.2f} TFLOPS")
+            print("  SwiGLU MLP...")
+            for i, (batch, seq_len, hidden_dim, intermediate_dim) in enumerate(configs['mlp_blocks'][:3]):  # Sample first 3
+                try:
+                    # Check memory before operation
+                    if self.enable_memory_optimization:
+                        mem_info = self.get_memory_info()
+                        if mem_info['free_gb'] < 1.5:
+                            self.clear_gpu_cache()
+                    
+                    result = self.benchmark_swiglu_mlp(batch, seq_len, hidden_dim, intermediate_dim)
+                    if result is not None:
+                        category_results.append(result)
+                        if i < 2:
+                            print(f"    OK {result.operator_name} {result.input_shape}: {result.delay_factor:.2f}x delay, {result.achieved_tflops:.2f} TFLOPS")
+                    else:
+                        print(f"    WARNING SwiGLU_MLP {(batch, seq_len, hidden_dim, intermediate_dim)}: Skipped (Out of Memory)")
+                        self.failed_operations.append({'op': 'SwiGLU_MLP', 'params': (batch, seq_len, hidden_dim, intermediate_dim), 'reason': 'OOM'})
+                        self.clear_gpu_cache()
+                        continue
+                except torch.cuda.OutOfMemoryError:
+                    print(f"     SwiGLU_MLP {(batch, seq_len, hidden_dim, intermediate_dim)}: Skipped (Out of Memory)")
+                    self.failed_operations.append({'op': 'SwiGLU_MLP', 'params': (batch, seq_len, hidden_dim, intermediate_dim), 'reason': 'OOM'})
+                    self.clear_gpu_cache()
+                    continue
+                except Exception as e:
+                    print(f"     SwiGLU_MLP {(batch, seq_len, hidden_dim, intermediate_dim)}: Error - {str(e)}")
+                    self.failed_operations.append({'op': 'SwiGLU_MLP', 'params': (batch, seq_len, hidden_dim, intermediate_dim), 'reason': str(e)})
+                    self.clear_gpu_cache()
+                    continue
             
             # Normalization
-            print("  🔧 RMS Normalization...")
-            for i, shape in enumerate(configs['norm_ops']):  # Sample first 4
-                result = self.benchmark_rms_norm(shape)
-                category_results.append(result)
-                if i < 2:
-                    print(f"    ✓ {result.operator_name} {result.input_shape}: {result.delay_factor:.2f}x delay, {result.achieved_tflops:.2f} TFLOPS")
+            print("  RMS Normalization...")
+            for i, shape in enumerate(configs['norm_ops'][:4]):  # Sample first 4
+                try:
+                    # Check memory before operation
+                    if self.enable_memory_optimization:
+                        mem_info = self.get_memory_info()
+                        if mem_info['free_gb'] < 0.5:
+                            self.clear_gpu_cache()
+                    
+                    result = self.benchmark_rms_norm(shape)
+                    if result is not None:
+                        category_results.append(result)
+                        if i < 2:
+                            print(f"    OK {result.operator_name} {result.input_shape}: {result.delay_factor:.2f}x delay, {result.achieved_tflops:.2f} TFLOPS")
+                    else:
+                        print(f"    WARNING RMS_Norm {shape}: Skipped (Out of Memory)")
+                        self.failed_operations.append({'op': 'RMS_Norm', 'params': shape, 'reason': 'OOM'})
+                        self.clear_gpu_cache()
+                        continue
+                except torch.cuda.OutOfMemoryError:
+                    print(f"     RMS_Norm {shape}: Skipped (Out of Memory)")
+                    self.failed_operations.append({'op': 'RMS_Norm', 'params': shape, 'reason': 'OOM'})
+                    self.clear_gpu_cache()
+                    continue
+                except Exception as e:
+                    print(f"     RMS_Norm {shape}: Error - {str(e)}")
+                    self.failed_operations.append({'op': 'RMS_Norm', 'params': shape, 'reason': str(e)})
+                    self.clear_gpu_cache()
+                    continue
             
             # Softmax
-            print("  🔧 Softmax...")
-            for i, shape in enumerate(configs['norm_ops']):  # Sample first 2
-                result = self.benchmark_softmax(shape)
-                category_results.append(result)
-                if i < 1:
-                    print(f"    ✓ {result.operator_name} {result.input_shape}: {result.delay_factor:.2f}x delay, {result.achieved_tflops:.2f} TFLOPS")
+            print("   Softmax...")
+            for i, shape in enumerate(configs['norm_ops'][:2]):  # Sample first 2
+                try:
+                    # Check memory before operation
+                    if self.enable_memory_optimization:
+                        mem_info = self.get_memory_info()
+                        if mem_info['free_gb'] < 0.5:
+                            self.clear_gpu_cache()
+                    
+                    result = self.benchmark_softmax(shape)
+                    if result is not None:
+                        category_results.append(result)
+                        if i < 1:
+                            print(f"    OK {result.operator_name} {result.input_shape}: {result.delay_factor:.2f}x delay, {result.achieved_tflops:.2f} TFLOPS")
+                    else:
+                        print(f"    WARNING Softmax {shape}: Skipped (Out of Memory)")
+                        self.failed_operations.append({'op': 'Softmax', 'params': shape, 'reason': 'OOM'})
+                        self.clear_gpu_cache()
+                        continue
+                except torch.cuda.OutOfMemoryError:
+                    print(f"     Softmax {shape}: Skipped (Out of Memory)")
+                    self.failed_operations.append({'op': 'Softmax', 'params': shape, 'reason': 'OOM'})
+                    self.clear_gpu_cache()
+                    continue
+                except Exception as e:
+                    print(f"     Softmax {shape}: Error - {str(e)}")
+                    self.failed_operations.append({'op': 'Softmax', 'params': shape, 'reason': str(e)})
+                    self.clear_gpu_cache()
+                    continue
             
             results[model_name] = category_results
         
@@ -817,7 +1080,7 @@ class OperatorDelayFactorBenchmark:
     def analyze_results(self, results: Dict[str, List[BenchmarkResult]]):
         """Analyze benchmark results and generate efficiency factors."""
         
-        print(f"\n📈 EFFICIENCY ANALYSIS")
+        print(f"\nEFFICIENCY ANALYSIS")
         print("=" * 80)
         
         # Group results by operator type
@@ -903,12 +1166,21 @@ class OperatorDelayFactorBenchmark:
         with open('memory_compute_efficiency_benchmark_results.json', 'w') as f:
             json.dump(output_data, f, indent=2)
         
-        print(f"\n💾 Results saved to memory_compute_efficiency_benchmark_results.json")
-        print(f"\n📊 EFFICIENCY SUMMARY:")
-        print("   • Compute-bound operators show high compute delay factors")
-        print("   • Memory-bound operators show high memory delay factors") 
-        print("   • Effective delay factor represents the true bottleneck")
-        print("   • Use effective_delay_factor for latency predictions")
+        print(f"\nResults saved to memory_compute_efficiency_benchmark_results.json")
+        
+        # Report failed operations if any
+        if self.failed_operations:
+            print(f"\nWARNING FAILED OPERATIONS ({len(self.failed_operations)} total):")
+            for failed_op in self.failed_operations[:10]:  # Show first 10
+                print(f"   - {failed_op['op']} {failed_op['params']}: {failed_op['reason']}")
+            if len(self.failed_operations) > 10:
+                print(f"   ... and {len(self.failed_operations) - 10} more")
+        
+        print(f"\nEFFICIENCY SUMMARY:")
+        print("   - Compute-bound operators show high compute delay factors")
+        print("   - Memory-bound operators show high memory delay factors") 
+        print("   - Effective delay factor represents the true bottleneck")
+        print("   - Use effective_delay_factor for latency predictions")
         
         return delay_factors
 
@@ -917,15 +1189,16 @@ def main():
     """Run the comprehensive operator performance delay factor benchmark."""
     
     if not torch.cuda.is_available():
-        print("❌ CUDA not available. This benchmark requires a GPU.")
+        print("ERROR CUDA not available. This benchmark requires a GPU.")
         return
     
-    # Initialize benchmark
+    # Initialize benchmark with memory optimization enabled
     benchmark = OperatorDelayFactorBenchmark(
         device='cuda',
         dtype=torch.float16,
         warmup_runs=3,
-        benchmark_runs=5
+        benchmark_runs=5,
+        enable_memory_optimization=True
     )
     
     # Run benchmarks
@@ -934,11 +1207,11 @@ def main():
     # Analyze results
     delay_factors = benchmark.analyze_results(results)
     
-    print(f"\n🎯 BENCHMARK COMPLETE!")
-    print(f"   • Measured compute AND memory efficiency for all operators")
-    print(f"   • Identified bottleneck types (compute/memory/balanced)")
-    print(f"   • Results include effective delay factors for accurate predictions") 
-    print(f"   • Use effective_delay_factor for improved latency modeling")
+    print(f"\nBENCHMARK COMPLETE!")
+    print(f"   - Measured compute AND memory efficiency for all operators")
+    print(f"   - Identified bottleneck types (compute/memory/balanced)")
+    print(f"   - Results include effective delay factors for accurate predictions") 
+    print(f"   - Use effective_delay_factor for improved latency modeling")
 
 
 if __name__ == "__main__":
