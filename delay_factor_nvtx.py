@@ -12,7 +12,7 @@ import subprocess
 import numpy as np
 from typing import Dict, List, Tuple, Optional
 from pathlib import Path
-
+import nvtx 
 
 class DelayFactorExtractor:
     """Extract delay factors by benchmarking actual GPU performance."""
@@ -120,10 +120,11 @@ class DelayFactorExtractor:
                 # Measure
                 times = []
                 for _ in range(self.measure_iterations):
-                    start_time = time.perf_counter()
-                    result = torch.matmul(A, B)
-                    torch.cuda.synchronize()
-                    end_time = time.perf_counter()
+                    with nvtx.annotate(f"Flops", color="Blue"):
+                        start_time = time.perf_counter()
+                        result = torch.matmul(A, B)
+                        torch.cuda.synchronize()
+                        end_time = time.perf_counter()
                     times.append(end_time - start_time)
                 
                 # Calculate statistics
@@ -211,11 +212,11 @@ class DelayFactorExtractor:
                     # Fill L2 cache with dummy data before each measurement
                     _ = torch.sum(dummy_tensor)  # Fill L2 with dummy data
                     torch.cuda.synchronize()
-                    
-                    start_time = time.perf_counter()
-                    result = torch.sum(src_tensor)  # Forces reading all elements from DRAM
-                    torch.cuda.synchronize()
-                    end_time = time.perf_counter()
+                    with nvtx.annotate(f"Memory_Read", color = "purple"):
+                        start_time = time.perf_counter()
+                        result = torch.sum(src_tensor)  # Forces reading all elements from DRAM
+                        torch.cuda.synchronize()
+                        end_time = time.perf_counter()
                     times.append(end_time - start_time)
                 
                 # Calculate statistics
@@ -308,10 +309,13 @@ class DelayFactorExtractor:
                     _ = torch.sum(dummy_tensor)  # Fill L2 with dummy data
                     torch.cuda.synchronize()
                     
-                    start_time = time.perf_counter()
-                    dst_tensor.fill_(1.0)  # Forces writing to all elements to DRAM
-                    torch.cuda.synchronize()
-                    end_time = time.perf_counter()
+
+                    with nvtx.annotate(f"MemoryWrite" , color="Red"):
+                        start_time = time.perf_counter()    
+                        dst_tensor.fill_(1.0)  # Forces writing to all elements to DRAM
+                        torch.cuda.synchronize()
+                        end_time = time.perf_counter()
+
                     times.append(end_time - start_time)
                 
                 # Calculate statistics
@@ -392,10 +396,11 @@ class DelayFactorExtractor:
                 # Measure memory copy time
                 times = []
                 for _ in range(self.measure_iterations):
-                    start_time = time.perf_counter()
-                    dst_tensor = src_tensor.clone()  # This involves read + write
-                    torch.cuda.synchronize()
-                    end_time = time.perf_counter()
+                    with nvtx.annotate(f"Memory", color="green"):
+                        start_time = time.perf_counter()
+                        dst_tensor = src_tensor.clone()  # This involves read + write
+                        torch.cuda.synchronize()
+                        end_time = time.perf_counter()
                     times.append(end_time - start_time)
                     del dst_tensor
                 
