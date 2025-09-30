@@ -356,72 +356,100 @@ class DelayFactorExtractor:
     def benchmark_memory(self, bytes_targets: List[float]) -> Dict[float, float]:
         """
         Benchmark memory performance and calculate delay factors.
-        
+
         Args:
             bytes_targets: List of byte counts to benchmark
-            
+
         Returns:
             Dictionary mapping bytes to delay factors
         """
         print("\\n" + "="*50)
         print("Benchmarking Memory Performance")
         print("="*50)
-        
+
         memory_delay_factors = {}
         bytes_per_element = 2  # FP16
-        
+
         for target_bytes in bytes_targets:
             print(f"\\nBenchmarking {target_bytes:.0e} bytes...")
-            
+
             # Calculate tensor size
             num_elements = int(target_bytes / bytes_per_element)
             actual_bytes = num_elements * bytes_per_element
-            
+
             print(f"  Tensor elements: {num_elements}")
             print(f"  Actual bytes: {actual_bytes:.0e}")
-            
+
             try:
                 # Create source tensor
                 src_tensor = torch.randn(num_elements, dtype=torch.float16, device=self.device)
-                
-                # Warmup - memory copy operations
+
+                # Create non-contiguous tensor by stride manipulation
+                # Use stride of 2 if tensor is large enough, otherwise use transpose
+                if num_elements > 4:
+                    # Method 1: Create non-contiguous by taking every other element
+                    # Then reshape to get back to original size
+                    half_elements = num_elements // 2
+                    temp_tensor = torch.randn(num_elements * 2, dtype=torch.float16, device=self.device)
+                    non_contig_tensor = temp_tensor[::2][:num_elements]  # Stride of 2
+                else:
+                    # For very small tensors, use the original tensor with view manipulation
+                    if num_elements > 1:
+                        non_contig_tensor = src_tensor.view(-1, 1).T.flatten()
+                    else:
+                        non_contig_tensor = src_tensor
+
+                # Verify it's non-contiguous (for debugging)
+                if not non_contig_tensor.is_contiguous() or num_elements <= 1:
+                    print(f"  Memory layout: {'contiguous' if non_contig_tensor.is_contiguous() else 'non-contiguous'}")
+
+                # Warmup - memory reorganization operations
                 for _ in range(self.warmup_iterations):
-                    _ = src_tensor.clone()
+                    if non_contig_tensor.is_contiguous():
+                        _ = non_contig_tensor.clone()  # Fallback to clone if already contiguous
+                    else:
+                        _ = non_contig_tensor.contiguous()  # Force memory reorganization
                 torch.cuda.synchronize()
-                
-                # Measure memory copy time
+
+                # Measure memory reorganization time
                 times = []
                 for _ in range(self.measure_iterations):
                     start_time = time.perf_counter()
-                    dst_tensor = src_tensor.clone()  # This involves read + write
+                    if non_contig_tensor.is_contiguous():
+                        dst_tensor = non_contig_tensor.clone()  # Fallback to clone
+                    else:
+                        dst_tensor = non_contig_tensor.contiguous()  # Force read + write with reorganization
                     torch.cuda.synchronize()
                     end_time = time.perf_counter()
                     times.append(end_time - start_time)
                     del dst_tensor
-                
+
                 # Calculate statistics
                 avg_time = np.mean(times)
                 std_time = np.std(times)
-                
+
                 # Calculate actual bandwidth (read + write = 2 * actual_bytes)
                 total_bytes_transferred = 2 * actual_bytes  # read source + write destination
                 actual_bandwidth_gb_s = (total_bytes_transferred / avg_time) / 1e9
-                
+
                 # Calculate delay factor
                 theoretical_bandwidth = self.theoretical_specs['memory_bandwidth_gb_s']
                 delay_factor = theoretical_bandwidth / actual_bandwidth_gb_s
-                
+
                 print(f"  Average time: {avg_time*1000:.2f}ms (±{std_time*1000:.2f}ms)")
                 print(f"  Actual bandwidth: {actual_bandwidth_gb_s:.2f} GB/s")
                 print(f"  Theoretical bandwidth: {theoretical_bandwidth:.2f} GB/s")
                 print(f"  Delay factor: {delay_factor:.2f}")
-                
+
                 memory_delay_factors[actual_bytes] = delay_factor
-                
+
                 # Clean up
                 del src_tensor
+                if 'temp_tensor' in locals():
+                    del temp_tensor
+                del non_contig_tensor
                 torch.cuda.empty_cache()
-                
+
             except torch.cuda.OutOfMemoryError:
                 print(f"  ❌ GPU 메모리 부족으로 건너뜀 (텐서 크기: {num_elements} elements)")
                 torch.cuda.empty_cache()
@@ -430,7 +458,7 @@ class DelayFactorExtractor:
                 print(f"  ❌ 측정 실패: {e}")
                 torch.cuda.empty_cache()
                 continue
-        
+
         return memory_delay_factors
     
     def extract_delay_factors(self, 
